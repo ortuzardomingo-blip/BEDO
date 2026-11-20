@@ -29,11 +29,13 @@ Sin configurar nada, la app arranca en **modo local**: todo se guarda en ese nav
 2. Abre **SQL Editor → New query**, pega el contenido de [`supabase/schema.sql`](supabase/schema.sql) y presiona **Run**.
 3. Ve a **Authentication → Users → Add user** y crea los usuarios (uno para cada uno, o uno compartido) con correo y contraseña. Marca *Auto confirm user*.
 4. En **Authentication → Sign In / Providers** desactiva *Allow new users to sign up* para que nadie más pueda crear cuenta.
-5. En **Project Settings → API** copia la *Project URL* y la *anon public key*.
+5. Copia dos datos del proyecto:
+   - **Project URL** (`https://xxxx.supabase.co`): en **Project Settings → Data API**, o con el botón verde **Connect** de arriba.
+   - **Publishable key** (`sb_publishable_...`): en **Project Settings → API Keys**.
    - Para desarrollo local: crea `.env.local` a partir de `.env.example` con esos dos valores.
-   - Para la versión publicada: en GitHub → **Settings → Secrets and variables → Actions → Variables**, crea `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+   - Para la versión publicada: en GitHub → **Settings → Secrets and variables → Actions → pestaña Variables**, crea `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
-> La *anon key* puede ser pública: los datos y las fotos están protegidos por las reglas de seguridad del script SQL, que exigen haber iniciado sesión.
+> La *publishable key* puede ser pública: los datos y las fotos están protegidos por las reglas de seguridad del script SQL, que exigen haber iniciado sesión. La **secret key** nunca debe ir en la app ni compartirse.
 
 ## Publicar en GitHub Pages
 

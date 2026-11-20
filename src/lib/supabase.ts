@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Activity, AppData, Backend, Photo, PhotoMeta, Settings, Wheel } from './types'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+// "Publishable key" (sb_publishable_...) — antes se llamaba "anon key"
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined
 
 export const supabase: SupabaseClient | null = url && key ? createClient(url, key) : null
 
