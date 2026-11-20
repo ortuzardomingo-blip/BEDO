@@ -45,6 +45,10 @@ create table if not exists public.wheels (
 
 create index if not exists photos_activity_idx on public.photos(activity_id);
 
+-- ---------- Permisos (los proyectos nuevos de Supabase no los dan por defecto) ----------
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.settings, public.activities, public.photos, public.wheels to authenticated;
+
 -- ---------- Seguridad: solo usuarios con sesión iniciada ----------
 alter table public.settings   enable row level security;
 alter table public.activities enable row level security;
