@@ -118,7 +118,7 @@ export function LocationPicker({
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border border-line">
-          <BaseMap className="h-[min(48dvh,380px)] w-full">
+          <BaseMap className="h-[min(48dvh,380px)] w-full" cooperative={false}>
             <ClickToSet onSet={(p) => setPoint({ ...p, name: point?.name ?? '' })} />
             <FitBounds points={focus} maxZoom={15} />
             {point && <Marker position={[point.lat, point.lng]} icon={dotIcon('accent')} />}

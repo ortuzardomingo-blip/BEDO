@@ -13,6 +13,12 @@ export interface ProcessedImage {
   lng: number | null
 }
 
+/** Fecha y GPS de un archivo original, sin procesarlo (para "Recuperar ubicaciones") */
+export async function readMeta(file: File) {
+  const [takenAt, gps] = await Promise.all([readTakenAt(file), readGps(file)])
+  return { takenAt, ...gps }
+}
+
 /** Coordenadas GPS de la foto (si el celular no las quitó al subirla) */
 async function readGps(file: File): Promise<{ lat: number | null; lng: number | null }> {
   try {

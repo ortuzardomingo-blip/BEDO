@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -28,17 +28,57 @@ export function FitBounds({ points, maxZoom = 13 }: { points: LatLng[]; maxZoom?
   return null
 }
 
+const isTouch = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+
+/**
+ * En celular: un dedo desplaza la página y dos dedos mueven/acercan el mapa
+ * (como Google Maps dentro de una página). Si intentan moverlo con un dedo, aparece un aviso.
+ */
+function TwoFingerHint() {
+  const map = useMap()
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const el = map.getContainer()
+    let t: ReturnType<typeof setTimeout>
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return
+      setShow(true)
+      clearTimeout(t)
+      t = setTimeout(() => setShow(false), 1200)
+    }
+    const onMulti = (e: TouchEvent) => e.touches.length > 1 && setShow(false)
+    el.addEventListener('touchmove', onMove, { passive: true })
+    el.addEventListener('touchstart', onMulti, { passive: true })
+    return () => {
+      clearTimeout(t)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchstart', onMulti)
+    }
+  }, [map])
+  return (
+    <div
+      className={`pointer-events-none absolute inset-0 z-[600] grid place-items-center bg-ink/35 text-center text-sm font-medium text-white transition-opacity duration-300 ${show ? 'opacity-100' : 'opacity-0'}`}
+    >
+      Usa dos dedos para mover el mapa
+    </div>
+  )
+}
+
 export function BaseMap({
   children,
   className,
   center = SANTIAGO,
   zoom = 11,
+  cooperative = true,
 }: {
   children?: ReactNode
   className?: string
   center?: LatLng
   zoom?: number
+  /** En celular, mover el mapa requiere dos dedos (para no atrapar el scroll) */
+  cooperative?: boolean
 }) {
+  const twoFinger = cooperative && isTouch()
   return (
     <MapContainer
       center={[center.lat, center.lng]}
@@ -46,8 +86,10 @@ export function BaseMap({
       className={className}
       zoomControl={false}
       attributionControl
+      dragging={!twoFinger}
       style={{ background: '#efe9e0' }}
     >
+      {twoFinger && <TwoFingerHint />}
       {/* OpenStreetMap (gratis); el filtro CSS .bedo-tiles lo deja en tonos neutros */}
       <TileLayer
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"

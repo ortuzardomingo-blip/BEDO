@@ -122,7 +122,8 @@ export function PhotosView() {
   return (
     <>
       <div className="flex items-center gap-2">
-        <div className="no-scrollbar -mx-4 flex flex-1 gap-2 overflow-x-auto px-4">
+        {/* Los filtros se desplazan solo dentro de su espacio, sin pasar bajo "Seleccionar" */}
+        <div className="no-scrollbar -ml-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pr-3 pl-4 [mask-image:linear-gradient(90deg,#000_88%,transparent)]">
           {(
             [
               ['all', 'Todas'],

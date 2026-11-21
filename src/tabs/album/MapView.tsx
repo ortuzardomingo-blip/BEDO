@@ -8,6 +8,7 @@ import { groupPhotos, type LatLng } from '../../lib/geo'
 import { navigate } from '../../lib/route'
 import { SANTIAGO, distanceKm, plural } from '../../lib/utils'
 import type { Photo } from '../../lib/types'
+import { RecoverLocations } from './RecoverLocations'
 
 export function MapView() {
   const { photos, activities, places } = useStore()
@@ -83,12 +84,19 @@ export function MapView() {
           </button>
         </p>
         {missing > 0 && (
-          <p className="rounded-2xl bg-sand/60 p-3.5 text-[13px] leading-relaxed">
-            {plural(missing, 'foto no tiene', 'fotos no tienen')} ubicación. Los celulares suelen quitarla al
-            subir fotos por seguridad. Para agregarla: <b className="font-medium text-ink">Fotos → Seleccionar</b>{' '}
-            → elige varias → <b className="font-medium text-ink">Ubicación</b>. Las fotos de un plan con
-            ubicación aparecen solas.
-          </p>
+          <div className="rounded-2xl bg-sand/60 p-4 text-[13px] leading-relaxed">
+            <p>
+              <b className="font-medium text-ink">{plural(missing, 'foto no tiene', 'fotos no tienen')} ubicación.</b>{' '}
+              Con <b className="font-medium text-ink">Recuperar ubicaciones</b> vuelven a elegir las fotos
+              originales y la app les asigna el lugar donde se sacaron, sin subirlas de nuevo. Funciona mejor
+              desde el computador, porque el celular suele quitar el GPS por privacidad.
+            </p>
+            <RecoverLocations className="mt-3" />
+            <p className="mt-3">
+              También pueden asignarla a mano: <b className="font-medium text-ink">Fotos → Seleccionar →
+              Ubicación</b>. Las fotos de un plan con lugar aparecen solas.
+            </p>
+          </div>
         )}
       </div>
 

@@ -1,9 +1,62 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Cloud, HardDrive, ImagePlus, LogOut } from 'lucide-react'
+import { Check, ChevronRight, Cloud, HardDrive, ImagePlus, LogOut } from 'lucide-react'
 import { Sheet } from './Sheet'
 import { UploadButton } from './UploadButton'
 import { useStore } from '../store'
+import type { Photo } from '../lib/types'
 import { cn, photoDate } from '../lib/utils'
+
+/** Hoja propia para elegir las fotos del marco: fotos grandes, fáciles de tocar */
+function FramePicker({ open, onClose, photos }: { open: boolean; onClose: () => void; photos: Photo[] }) {
+  const { updatePhoto } = useStore()
+  const [onlySel, setOnlySel] = useState(false)
+  const count = photos.filter((p) => p.inFrame).length
+  const shown = onlySel ? photos.filter((p) => p.inFrame) : photos
+  return (
+    <Sheet open={open} onClose={onClose} title="Fotos del marco" subtitle="Toca una foto para agregarla o quitarla." wide>
+      <div className="sticky top-0 z-10 -mx-1 mb-3 flex gap-2 bg-card px-1 pb-2">
+        <button className={!onlySel ? 'chip-on' : 'chip-off'} onClick={() => setOnlySel(false)}>
+          Todas <span className="opacity-60">{photos.length}</span>
+        </button>
+        <button className={onlySel ? 'chip-on' : 'chip-off'} onClick={() => setOnlySel(true)}>
+          Elegidas <span className="opacity-60">{count}</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {shown.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => updatePhoto(p.id, { inFrame: !p.inFrame })}
+            className={cn(
+              'relative aspect-square overflow-hidden rounded-2xl bg-sand transition',
+              p.inFrame && 'ring-[3px] ring-ink ring-offset-2 ring-offset-card',
+            )}
+            aria-pressed={p.inFrame}
+          >
+            <img
+              src={p.thumb}
+              alt=""
+              loading="lazy"
+              className={cn('size-full object-cover transition', p.inFrame ? 'scale-100' : 'opacity-80')}
+            />
+            <span
+              className={cn(
+                'absolute top-2 right-2 grid size-7 place-items-center rounded-full border-2 transition',
+                p.inFrame ? 'border-ink bg-ink text-paper' : 'border-white bg-black/20 text-transparent',
+              )}
+            >
+              <Check size={15} strokeWidth={3} />
+            </span>
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 && <p className="py-8 text-center text-sm text-muted">Aún no eligen fotos para el marco.</p>}
+      <button className="btn-primary sticky bottom-0 mt-4 h-12 w-full" onClick={onClose}>
+        Listo
+      </button>
+    </Sheet>
+  )
+}
 
 export function SettingsSheet({
   open,
@@ -14,7 +67,8 @@ export function SettingsSheet({
   onClose: () => void
   section?: 'frame'
 }) {
-  const { settings, updateSettings, photos, updatePhoto, uploadPhotos, mode, signOut } = useStore()
+  const { settings, updateSettings, photos, uploadPhotos, mode, signOut } = useStore()
+  const [pickingFrame, setPickingFrame] = useState(false)
   const [title, setTitle] = useState('')
   const [nameA, setNameA] = useState('')
   const [nameB, setNameB] = useState('')
@@ -110,31 +164,23 @@ export function SettingsSheet({
             </UploadButton>
           </div>
           {sorted.length ? (
-            <div className="grid max-h-80 grid-cols-4 gap-1.5 overflow-y-auto rounded-2xl sm:grid-cols-6">
-              {sorted.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => updatePhoto(p.id, { inFrame: !p.inFrame })}
-                  className="relative aspect-square overflow-hidden rounded-xl bg-sand"
-                  aria-pressed={p.inFrame}
-                >
+            <button
+              onClick={() => setPickingFrame(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-line p-3 text-left transition hover:border-ink/30"
+            >
+              <span className="flex -space-x-3">
+                {(inFrame ? sorted.filter((p) => p.inFrame) : sorted).slice(0, 5).map((p) => (
                   <img
+                    key={p.id}
                     src={p.thumb}
                     alt=""
-                    loading="lazy"
-                    className={cn('size-full object-cover transition', !p.inFrame && 'opacity-55 grayscale-[40%]')}
+                    className="size-11 rounded-xl border-2 border-card object-cover shadow-soft"
                   />
-                  <span
-                    className={cn(
-                      'absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full border transition',
-                      p.inFrame ? 'border-ink bg-ink text-paper' : 'border-white/90 bg-black/10 text-transparent',
-                    )}
-                  >
-                    <Check size={12} strokeWidth={3} />
-                  </span>
-                </button>
-              ))}
-            </div>
+                ))}
+              </span>
+              <span className="flex-1 text-sm font-medium">Elegir fotos</span>
+              <ChevronRight size={16} className="text-muted" />
+            </button>
           ) : (
             <p className="rounded-2xl bg-sand/60 p-4 text-sm text-muted">
               Cuando suban fotos podrán elegir cuáles aparecen alrededor de la app.
@@ -163,6 +209,7 @@ export function SettingsSheet({
           )}
         </section>
       </div>
+      <FramePicker open={pickingFrame} onClose={() => setPickingFrame(false)} photos={sorted} />
     </Sheet>
   )
 }
