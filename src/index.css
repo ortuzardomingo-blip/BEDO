@@ -100,6 +100,8 @@
   width: 100%;
   aspect-ratio: 210 / 297;
   overflow: hidden;
+  /* Permite medir textos y fotos en "cqw" (% del ancho de la hoja) */
+  container-type: inline-size;
   box-shadow: 0 10px 30px -15px rgb(29 27 25 / 0.35);
 }
 @media print {

@@ -175,25 +175,35 @@ function BookPreview({
         </div>
       </div>
 
-      <div ref={ref} className="book mx-auto max-w-[210mm] space-y-6 py-6">
+      <div ref={ref} className="book mx-auto max-w-[210mm] space-y-6 px-4 py-6 sm:px-0">
+        {/*
+          Todas las medidas van en "cqw" (% del ancho de la hoja): la vista previa es una
+          miniatura exacta de la hoja A4 impresa, en cualquier pantalla.
+        */}
         {/* Portada */}
-        <section className="book-page flex flex-col items-center justify-center bg-[#fffdfa] p-[14mm] text-center">
+        <section className="book-page flex flex-col items-center justify-center bg-[#fffdfa] p-[7cqw] text-center">
           {book.cover && (
-            <img src={big ? book.cover.src : book.cover.thumb} alt="" className="mb-10 max-h-[150mm] w-[120mm] rounded-sm object-cover" />
+            <img
+              src={big ? book.cover.src : book.cover.thumb}
+              alt=""
+              className="mb-[7cqw] h-[80cqw] w-[62cqw] rounded-[0.6cqw] object-cover"
+            />
           )}
-          <p className="font-serif text-5xl font-light">{book.title}</p>
-          {book.subtitle && <p className="mt-3 text-sm tracking-[0.2em] text-muted uppercase">{book.subtitle}</p>}
+          <p className="font-serif text-[8cqw] leading-tight font-light">{book.title}</p>
+          {book.subtitle && (
+            <p className="mt-[2cqw] text-[2.2cqw] tracking-[0.2em] text-muted uppercase">{book.subtitle}</p>
+          )}
         </section>
 
         {'milestones' in book && book.milestones && book.milestones.length > 0 && (
-          <section className="book-page bg-[#fffdfa] p-[18mm]">
-            <p className="font-serif text-3xl">Nuestros momentos</p>
-            <ul className="mt-8 space-y-5">
+          <section className="book-page flex flex-col bg-[#fffdfa] p-[9cqw]">
+            <p className="font-serif text-[5.5cqw]">Nuestros momentos</p>
+            <ul className="mt-[5cqw] space-y-[3cqw]">
               {book.milestones.map((m) => (
                 <li key={m.id}>
-                  <p className="text-xs tracking-wider text-muted uppercase">{formatDay(m.date)}</p>
-                  <p className="font-serif text-xl">{m.title}</p>
-                  {notes && m.note && <p className="text-sm text-ink-soft">{m.note}</p>}
+                  <p className="text-[1.8cqw] tracking-wider text-muted uppercase">{formatDay(m.date)}</p>
+                  <p className="font-serif text-[3.6cqw] leading-snug">{m.title}</p>
+                  {notes && m.note && <p className="text-[2.3cqw] text-ink-soft">{m.note}</p>}
                 </li>
               ))}
             </ul>
@@ -202,33 +212,47 @@ function BookPreview({
 
         {book.chapters.map((c, ci) =>
           chunk(c.photos, 4).map((group, gi) => (
-            <section key={`${ci}-${gi}`} className="book-page bg-[#fffdfa] p-[14mm]">
+            <section key={`${ci}-${gi}`} className="book-page flex flex-col bg-[#fffdfa] p-[7cqw]">
               {gi === 0 && (
-                <header className="mb-6">
-                  <p className="font-serif text-3xl">{c.title}</p>
-                  {c.subtitle && <p className="text-sm text-muted">{c.subtitle}</p>}
-                  {notes && c.note && <p className="mt-2 text-sm text-ink-soft italic">“{c.note}”</p>}
+                <header className="mb-[4cqw] shrink-0">
+                  <p className="font-serif text-[5.5cqw] leading-tight">{c.title}</p>
+                  {c.subtitle && <p className="mt-[0.5cqw] text-[2.2cqw] text-muted">{c.subtitle}</p>}
+                  {notes && c.note && (
+                    <p className="mt-[1.5cqw] line-clamp-3 text-[2.3cqw] text-ink-soft italic">“{c.note}”</p>
+                  )}
                 </header>
               )}
-              <div className={group.length === 1 ? 'grid' : 'grid grid-cols-2 gap-[5mm]'}>
-                {group.map((p) => (
-                  <figure key={p.id} className="break-inside-avoid">
-                    <img
-                      src={big ? p.src : p.thumb}
-                      alt=""
-                      className={group.length === 1 ? 'max-h-[200mm] w-full object-contain' : 'aspect-[4/5] w-full object-cover'}
-                    />
-                    {notes && p.caption && <figcaption className="mt-1.5 text-xs text-ink-soft">{p.caption}</figcaption>}
-                  </figure>
-                ))}
-              </div>
+              {group.length === 1 ? (
+                // Una sola foto: ocupa todo el espacio libre sin recortarse
+                <figure className="flex min-h-0 flex-1 flex-col">
+                  <img src={big ? group[0].src : group[0].thumb} alt="" className="min-h-0 w-full flex-1 object-contain" />
+                  {notes && group[0].caption && (
+                    <figcaption className="mt-[1.5cqw] text-center text-[2cqw] text-ink-soft">{group[0].caption}</figcaption>
+                  )}
+                </figure>
+              ) : (
+                <div className="grid grid-cols-2 gap-[3cqw]">
+                  {group.map((p) => (
+                    <figure key={p.id}>
+                      <img
+                        src={big ? p.src : p.thumb}
+                        alt=""
+                        className={`w-full object-cover ${group.length === 2 ? 'aspect-[3/4]' : 'aspect-square'}`}
+                      />
+                      {notes && p.caption && (
+                        <figcaption className="mt-[1cqw] line-clamp-2 text-[1.9cqw] text-ink-soft">{p.caption}</figcaption>
+                      )}
+                    </figure>
+                  ))}
+                </div>
+              )}
             </section>
           )),
         )}
 
-        <section className="book-page flex flex-col items-center justify-center bg-[#fffdfa] p-[14mm] text-center">
-          <p className="font-serif text-3xl italic">Continuará…</p>
-          {names && <p className="mt-3 text-sm text-muted">{names}</p>}
+        <section className="book-page flex flex-col items-center justify-center bg-[#fffdfa] p-[7cqw] text-center">
+          <p className="font-serif text-[5.5cqw] italic">Continuará…</p>
+          {names && <p className="mt-[2cqw] text-[2.2cqw] text-muted">{names}</p>}
         </section>
       </div>
     </div>,
