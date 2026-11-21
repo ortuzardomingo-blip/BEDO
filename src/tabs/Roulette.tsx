@@ -8,12 +8,21 @@ import { WheelEditSheet } from './roulette/WheelEditSheet'
 import { COMBO_WHEELS } from '../lib/seed'
 import { celebrate } from '../lib/celebrate'
 import type { Wheel } from '../lib/types'
+import { placeAvg } from './us/PlacesView'
+import { PageTitle } from '../components/Segmented'
 
 const pick = (l: string[]) => l[Math.floor(Math.random() * l.length)]
+const FAV_ID = '__favoritos'
 
 export function Roulette() {
-  const { wheels, addWheel, addActivity, toast } = useStore()
-  const sorted = useMemo(() => wheels.slice().sort((a, b) => a.position - b.position), [wheels])
+  const { wheels, places, addWheel, addActivity, toast } = useStore()
+  const sorted = useMemo(() => {
+    const list = wheels.slice().sort((a, b) => a.position - b.position)
+    // Ruleta automática con los lugares mejor calificados (4★ o más)
+    const fav = places.filter((p) => (placeAvg(p) ?? 0) >= 4).map((p) => p.name)
+    if (fav.length >= 2) list.unshift({ id: FAV_ID, name: 'Favoritos', icon: 'heart', options: fav, position: -1 })
+    return list
+  }, [wheels, places])
   const [selId, setSelId] = useState<string | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -28,10 +37,7 @@ export function Roulette() {
 
   return (
     <section>
-      <div>
-        <h1 className="font-serif text-4xl font-light tracking-tight sm:text-5xl">Ruleta</h1>
-        <p className="mt-1 text-sm text-muted">¿No saben qué hacer? Que decida la suerte.</p>
-      </div>
+      <PageTitle title="Ruleta" subtitle="¿No saben qué hacer? Que decida la suerte." />
 
       <div className="no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1">
         {sorted.map((w) => (
@@ -81,9 +87,11 @@ export function Roulette() {
                 <span className="text-xs uppercase tracking-[0.14em] text-muted">
                   {wheel.name} · {wheel.options.length} opciones
                 </span>
-                <button className="btn-icon -mr-2 size-8" onClick={() => setEditId(wheel.id)} aria-label="Editar ruleta">
-                  <Pencil size={15} />
-                </button>
+                {wheel.id !== FAV_ID && (
+                  <button className="btn-icon -mr-2 size-8" onClick={() => setEditId(wheel.id)} aria-label="Editar ruleta">
+                    <Pencil size={15} />
+                  </button>
+                )}
               </div>
               <AnimatePresence mode="wait">
                 {result ? (

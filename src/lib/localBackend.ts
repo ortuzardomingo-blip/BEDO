@@ -1,24 +1,28 @@
 import { createStore, del, get, set } from 'idb-keyval'
-import type { Activity, AppData, Backend, Photo, PhotoMeta, Settings, Wheel } from './types'
+import {
+  TABLE_NAMES,
+  type AppData,
+  type Backend,
+  type Photo,
+  type PhotoMeta,
+  type Settings,
+  type TableName,
+  type Tables,
+} from './types'
+import { normalize } from './normalize'
 
 /**
  * Backend "modo local": guarda todo en el navegador (IndexedDB).
  * Sirve para probar la app sin configurar Supabase. Los datos NO se comparten entre dispositivos.
  */
-interface Stored {
-  settings: Settings | null
-  activities: Activity[]
-  photos: PhotoMeta[]
-  wheels: Wheel[]
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Stored = { settings: Settings | null } & Partial<Record<TableName, any[]>>
 
 const store = createStore('bedo-local', 'kv')
 const urlCache = new Map<string, string>()
 
 async function readAll(): Promise<Stored> {
-  return (
-    (await get<Stored>('data', store)) ?? { settings: null, activities: [], photos: [], wheels: [] }
-  )
+  return (await get<Stored>('data', store)) ?? { settings: null }
 }
 
 let queue: Promise<unknown> = Promise.resolve()
@@ -46,7 +50,7 @@ async function resolve(m: PhotoMeta): Promise<Photo> {
   return { ...m, src: await blobUrl(m.path), thumb: await blobUrl(m.thumbPath) }
 }
 
-function upsert<T extends { id: string }>(arr: T[], items: T[]) {
+function upsert(arr: any[], items: any[]) {
   for (const it of items) {
     const i = arr.findIndex((x) => x.id === it.id)
     if (i >= 0) arr[i] = it
@@ -58,32 +62,36 @@ export const localBackend: Backend = {
   mode: 'local',
   async load(): Promise<AppData> {
     const d = await readAll()
-    return {
-      settings: d.settings,
-      activities: d.activities,
-      wheels: d.wheels,
-      photos: await Promise.all(d.photos.map(resolve)),
+    const tables = {} as Tables
+    for (const t of TABLE_NAMES) {
+      const rows = (d[t] ?? []).map((r) => normalize(t, r))
+      ;(tables as any)[t] = t === 'photos' ? await Promise.all(rows.map(resolve)) : rows
     }
+    return { settings: d.settings, tables }
   },
   saveSettings: (s) => mutate((d) => void (d.settings = s)),
-  saveActivities: (list) => mutate((d) => upsert(d.activities, list)),
-  deleteActivity: (id) =>
+  save: (table, rows) => mutate((d) => upsert((d[table] ??= []), rows)),
+  remove: (table, id) =>
     mutate((d) => {
-      d.activities = d.activities.filter((a) => a.id !== id)
-      d.photos.forEach((p) => p.activityId === id && (p.activityId = null))
+      d[table] = (d[table] ?? []).filter((r) => r.id !== id)
+      // Equivalente a "on delete set null" de la base de datos
+      if (table === 'activities') {
+        d.photos?.forEach((p) => p.activityId === id && (p.activityId = null))
+        d.goals?.forEach((g) => g.activityId === id && (g.activityId = null))
+      }
     }),
   async uploadPhoto(meta, full, thumb) {
     await set(`blob:${meta.path}`, full, store)
     await set(`blob:${meta.thumbPath}`, thumb, store)
-    await mutate((d) => upsert(d.photos, [meta]))
+    await mutate((d) => upsert((d.photos ??= []), [meta]))
     return resolve(meta)
   },
-  savePhotos: (list) => mutate((d) => upsert(d.photos, list)),
   async deletePhoto(p) {
-    await mutate((d) => void (d.photos = d.photos.filter((x) => x.id !== p.id)))
+    await mutate((d) => {
+      d.photos = (d.photos ?? []).filter((x) => x.id !== p.id)
+      d.milestones?.forEach((m) => m.photoId === p.id && (m.photoId = null))
+    })
     await del(`blob:${p.path}`, store)
     await del(`blob:${p.thumbPath}`, store)
   },
-  saveWheels: (list) => mutate((d) => upsert(d.wheels, list)),
-  deleteWheel: (id) => mutate((d) => void (d.wheels = d.wheels.filter((w) => w.id !== id))),
 }

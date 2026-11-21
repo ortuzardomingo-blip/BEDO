@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ImagePlus, RotateCcw, Trash2 } from 'lucide-react'
+import { ChevronRight, ImagePlus, MapPin, RotateCcw, Trash2 } from 'lucide-react'
 import { Confirm, Sheet } from '../../components/Sheet'
+import { LocationPicker } from '../../components/map/LocationPicker'
+import { AddToCalendar } from './AddToCalendar'
 import { UploadButton } from '../../components/UploadButton'
 import { PhotoViewer } from '../../components/PhotoViewer'
 import { PhotoEditSheet } from '../../components/PhotoEditSheet'
@@ -18,12 +20,15 @@ export function ActivitySheet({ id, onClose }: { id: string | null; onClose: () 
   const [confirm, setConfirm] = useState(false)
   const [view, setView] = useState(-1)
   const [editing, setEditing] = useState<Photo | null>(null)
+  const [sched, setSched] = useState('')
+  const [picking, setPicking] = useState(false)
 
   useEffect(() => {
     if (!activity) return
     setTitle(activity.title)
     setNote(activity.note)
     setDate(activity.doneAt ?? todayISO())
+    setSched(activity.scheduledFor ?? '')
     // Solo al abrir otro plan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activity?.id])
@@ -42,6 +47,7 @@ export function ActivitySheet({ id, onClose }: { id: string | null; onClose: () 
       if (title.trim() && title.trim() !== activity.title) patch.title = title.trim()
       if (note.trim() !== activity.note) patch.note = note.trim()
       if (activity.done && date && date !== activity.doneAt) patch.doneAt = date
+      if (!activity.done && (sched || null) !== activity.scheduledFor) patch.scheduledFor = sched || null
       if (Object.keys(patch).length) updateActivity(activity.id, patch)
     }
     onClose()
@@ -71,6 +77,51 @@ export function ActivitySheet({ id, onClose }: { id: string | null; onClose: () 
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
+
+            {!activity.done && (
+              <div>
+                <label className="label" htmlFor="sc">
+                  Agendar para
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="sc"
+                    type="date"
+                    className="field"
+                    value={sched}
+                    min={todayISO()}
+                    onChange={(e) => setSched(e.target.value)}
+                  />
+                  {sched && (
+                    <button className="btn-ghost shrink-0" onClick={() => setSched('')}>
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                {sched && (
+                  <div className="mt-2">
+                    <AddToCalendar title={title || activity.title} date={sched} details="Plan de BEDO" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setPicking(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-line p-3.5 text-left transition hover:border-ink/30"
+            >
+              <MapPin size={20} strokeWidth={1.5} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">Lugar</span>
+                <span className="block truncate text-xs text-muted">
+                  {activity.lat != null
+                    ? activity.placeName || 'Ubicación guardada'
+                    : 'Sin lugar · sus fotos aparecerán en el mapa'}
+                </span>
+              </span>
+              <ChevronRight size={16} className="text-muted" />
+            </button>
 
             {activity.done && (
               <>
@@ -176,6 +227,20 @@ export function ActivitySheet({ id, onClose }: { id: string | null; onClose: () 
         }}
       />
       <PhotoEditSheet photo={editing} onClose={() => setEditing(null)} />
+      <LocationPicker
+        open={picking}
+        onClose={() => setPicking(false)}
+        title={`¿Dónde fue “${activity?.title ?? ''}”?`}
+        initial={
+          activity?.lat != null && activity.lng != null
+            ? { lat: activity.lat, lng: activity.lng, name: activity.placeName }
+            : null
+        }
+        onPick={(p) =>
+          activity &&
+          updateActivity(activity.id, { lat: p?.lat ?? null, lng: p?.lng ?? null, placeName: p?.name ?? '' })
+        }
+      />
       <Confirm
         open={confirm}
         onClose={() => setConfirm(false)}

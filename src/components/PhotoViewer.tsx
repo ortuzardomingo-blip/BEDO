@@ -3,6 +3,7 @@ import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Download from 'yet-another-react-lightbox/plugins/download'
+import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
 import 'yet-another-react-lightbox/styles.css'
 import 'yet-another-react-lightbox/plugins/captions.css'
 import { Pencil } from 'lucide-react'
@@ -15,11 +16,14 @@ export function PhotoViewer({
   index,
   onClose,
   onEdit,
+  autoplay,
 }: {
   photos: Photo[]
   index: number
   onClose: () => void
   onEdit?: (p: Photo) => void
+  /** Inicia como presentación automática */
+  autoplay?: boolean
 }) {
   const { activities } = useStore()
   const [cur, setCur] = useState(index)
@@ -47,7 +51,8 @@ export function PhotoViewer({
       index={Math.max(index, 0)}
       close={onClose}
       slides={slides}
-      plugins={[Zoom, Captions, Download]}
+      plugins={[Zoom, Captions, Download, Slideshow]}
+      slideshow={{ autoplay: !!autoplay, delay: 2800 }}
       on={{ view: ({ index: i }) => setCur(i) }}
       carousel={{ finite: photos.length < 3 }}
       captions={{ descriptionTextAlign: 'center' }}
@@ -65,6 +70,7 @@ export function PhotoViewer({
               <Pencil size={22} strokeWidth={1.75} />
             </button>
           ) : null,
+          'slideshow',
           'download',
           'close',
         ].filter(Boolean),

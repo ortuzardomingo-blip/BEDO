@@ -9,6 +9,22 @@ export interface ProcessedImage {
   width: number
   height: number
   takenAt: string | null
+  lat: number | null
+  lng: number | null
+}
+
+/** Coordenadas GPS de la foto (si el celular no las quitó al subirla) */
+async function readGps(file: File): Promise<{ lat: number | null; lng: number | null }> {
+  try {
+    const { default: exifr } = await import('exifr')
+    const g = await exifr.gps(file)
+    if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude) && (g.latitude || g.longitude)) {
+      return { lat: g.latitude, lng: g.longitude }
+    }
+  } catch {
+    /* sin GPS */
+  }
+  return { lat: null, lng: null }
 }
 
 function isHeic(file: File) {
@@ -56,6 +72,7 @@ function dimensions(blob: Blob): Promise<{ width: number; height: number }> {
  */
 export async function processImage(input: File): Promise<ProcessedImage> {
   const takenAt = await readTakenAt(input)
+  const gps = await readGps(input)
   let file: File = input
 
   if (isHeic(input)) {
@@ -87,5 +104,5 @@ export async function processImage(input: File): Promise<ProcessedImage> {
   })
 
   const { width, height } = await dimensions(full)
-  return { full, thumb, width, height, takenAt }
+  return { full, thumb, width, height, takenAt, ...gps }
 }

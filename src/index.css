@@ -95,6 +95,68 @@
   }
 }
 
+/* ---------- Libro de recuerdos ---------- */
+.book-page {
+  width: 100%;
+  aspect-ratio: 210 / 297;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -15px rgb(29 27 25 / 0.35);
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body.book-open > *:not(.book-root) {
+    display: none !important;
+  }
+  body.book-open {
+    background: #fff;
+  }
+  body.book-open .book-root {
+    position: static;
+    overflow: visible;
+    background: #fff;
+  }
+  .book-toolbar {
+    display: none !important;
+  }
+  .book {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .book > * + * {
+    margin-top: 0 !important;
+  }
+  .book-page {
+    width: 210mm;
+    height: 297mm;
+    aspect-ratio: auto;
+    box-shadow: none;
+    break-after: page;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* Mapa en tonos cálidos y suaves, a juego con la app */
+.bedo-tiles {
+  filter: grayscale(1) sepia(0.18) contrast(0.88) brightness(1.06);
+}
+
+/* Mapa: popups con la tipografía de la app */
+.leaflet-container {
+  font-family: var(--font-sans);
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  box-shadow: var(--shadow-lift);
+}
+.leaflet-control-attribution {
+  font-size: 9px;
+  background: rgb(255 253 250 / 0.7) !important;
+}
+
 /* Lightbox con el mismo tono de la app */
 .yarl__root {
   --yarl__color_backdrop: rgb(20 18 17 / 0.96);

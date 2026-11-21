@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { AnimatePresence, motion } from 'motion/react'
-import { Dices, Images, ListChecks, Settings as Gear, type LucideIcon } from 'lucide-react'
+import { Dices, Heart, House, Images, ListChecks, Settings as Gear, type LucideIcon } from 'lucide-react'
 import { StoreProvider, useStore } from './store'
 import { supabase, createSupabaseBackend } from './lib/supabase'
 import { localBackend } from './lib/localBackend'
@@ -9,22 +9,21 @@ import { Login } from './components/Login'
 import { Toasts } from './components/Toasts'
 import { FrameRails, FrameStrip } from './components/PhotoFrame'
 import { SettingsSheet } from './components/SettingsSheet'
+import { Home } from './tabs/Home'
 import { Album } from './tabs/Album'
 import { Plans } from './tabs/Plans'
 import { Roulette } from './tabs/Roulette'
+import { Nosotros } from './tabs/Nosotros'
+import { navigate, useRoute, type Tab } from './lib/route'
 import { cn, daysSince } from './lib/utils'
 
-type Tab = 'album' | 'planes' | 'ruleta'
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'inicio', label: 'Inicio', icon: House },
   { id: 'album', label: 'Álbum', icon: Images },
   { id: 'planes', label: 'Planes', icon: ListChecks },
   { id: 'ruleta', label: 'Ruleta', icon: Dices },
+  { id: 'nosotros', label: 'Nosotros', icon: Heart },
 ]
-
-const readHash = (): Tab => {
-  const h = location.hash.slice(1) as Tab
-  return TABS.some((t) => t.id === h) ? h : 'album'
-}
 
 function Splash() {
   return (
@@ -42,25 +41,14 @@ function Splash() {
 
 function Shell() {
   const { ready, settings } = useStore()
-  const [tab, setTab] = useState<Tab>(readHash)
+  const { tab, sub } = useRoute()
   const [settingsOpen, setSettingsOpen] = useState<false | 'all' | 'frame'>(false)
-
-  useEffect(() => {
-    const on = () => setTab(readHash())
-    window.addEventListener('hashchange', on)
-    return () => window.removeEventListener('hashchange', on)
-  }, [])
 
   useEffect(() => {
     document.title = settings.title || 'BEDO'
   }, [settings.title])
 
-  const go = (t: Tab) => {
-    if (t === tab) return
-    history.replaceState(null, '', `#${t}`)
-    setTab(t)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const go = (t: Tab) => navigate(t)
 
   if (!ready) return <Splash />
 
@@ -104,7 +92,7 @@ function Shell() {
                   key={t.id}
                   onClick={() => go(t.id)}
                   className={cn(
-                    'relative flex h-9 items-center gap-2 rounded-full px-4 text-sm transition',
+                    'relative flex h-9 items-center gap-2 rounded-full px-3 text-sm transition lg:px-4',
                     tab === t.id ? 'text-paper' : 'text-ink-soft hover:text-ink',
                   )}
                 >
@@ -116,7 +104,7 @@ function Shell() {
                     />
                   )}
                   <t.icon size={16} strokeWidth={1.75} className="relative" />
-                  <span className="relative">{t.label}</span>
+                  <span className={cn('relative', tab !== t.id && 'hidden lg:inline')}>{t.label}</span>
                 </button>
               ))}
             </nav>
@@ -140,9 +128,11 @@ function Shell() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
             >
-              {tab === 'album' && <Album />}
-              {tab === 'planes' && <Plans />}
+              {tab === 'inicio' && <Home />}
+              {tab === 'album' && <Album sub={sub} />}
+              {tab === 'planes' && <Plans sub={sub} />}
               {tab === 'ruleta' && <Roulette />}
+              {tab === 'nosotros' && <Nosotros sub={sub} />}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -156,13 +146,13 @@ function Shell() {
               key={t.id}
               onClick={() => go(t.id)}
               className={cn(
-                'flex flex-1 flex-col items-center gap-1 pt-2.5 pb-2 text-[11px] transition',
+                'flex min-w-0 flex-1 flex-col items-center gap-1 pt-2.5 pb-2 text-[10.5px] transition',
                 tab === t.id ? 'text-ink' : 'text-muted',
               )}
             >
               <span
                 className={cn(
-                  'grid h-8 w-14 place-items-center rounded-full transition',
+                  'grid h-8 w-12 place-items-center rounded-full transition',
                   tab === t.id && 'bg-sand',
                 )}
               >

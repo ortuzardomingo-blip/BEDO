@@ -1,5 +1,14 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Activity, AppData, Backend, Photo, PhotoMeta, Settings, Wheel } from './types'
+import {
+  TABLE_NAMES,
+  type AppData,
+  type Backend,
+  type Photo,
+  type PhotoMeta,
+  type Settings,
+  type Tables,
+} from './types'
+import { normalize, toCamel, toSnake } from './normalize'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 // "Publishable key" (sb_publishable_...) — antes se llamaba "anon key"
@@ -10,69 +19,21 @@ export const supabase: SupabaseClient | null = url && key ? createClient(url, ke
 const BUCKET = 'photos'
 const SIGN_TTL = 60 * 60 * 24 * 7 // 7 días
 
-// ---------- mapeo filas <-> objetos ----------
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const toActivity = (r: any): Activity => ({
-  id: r.id,
-  title: r.title,
-  note: r.note ?? '',
-  done: r.done,
-  doneAt: r.done_at,
-  position: r.position ?? 0,
-  createdAt: r.created_at,
-})
-const fromActivity = (a: Activity) => ({
-  id: a.id,
-  title: a.title,
-  note: a.note,
-  done: a.done,
-  done_at: a.doneAt,
-  position: a.position,
-  created_at: a.createdAt,
-})
-const toPhoto = (r: any): PhotoMeta => ({
-  id: r.id,
-  path: r.path,
-  thumbPath: r.thumb_path,
-  caption: r.caption ?? '',
-  takenAt: r.taken_at,
-  activityId: r.activity_id,
-  inFrame: r.in_frame,
-  width: r.width ?? 4,
-  height: r.height ?? 3,
-  createdAt: r.created_at,
-})
-const fromPhoto = (p: PhotoMeta) => ({
-  id: p.id,
-  path: p.path,
-  thumb_path: p.thumbPath,
-  caption: p.caption,
-  taken_at: p.takenAt,
-  activity_id: p.activityId,
-  in_frame: p.inFrame,
-  width: p.width,
-  height: p.height,
-  created_at: p.createdAt,
-})
-const toWheel = (r: any): Wheel => ({
-  id: r.id,
-  name: r.name,
-  icon: r.icon ?? 'sparkles',
-  options: Array.isArray(r.options) ? r.options : [],
-  position: r.position ?? 0,
-})
 const toSettings = (r: any): Settings => ({
   title: r.title ?? 'BEDO',
   nameA: r.name_a ?? '',
   nameB: r.name_b ?? '',
   since: r.since,
 })
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function check<T>(res: { data: T | null; error: unknown }): T {
   if (res.error) throw res.error
   return res.data as T
 }
+
+/** Tabla aún no creada (falta correr la migración SQL) */
+const isMissingTable = (e: any) => e?.code === 'PGRST205' || e?.code === '42P01'
 
 // Cache de URLs firmadas para no volver a descargar imágenes en cada recarga
 const signed = new Map<string, { url: string; exp: number }>()
@@ -100,21 +61,25 @@ export function createSupabaseBackend(sb: SupabaseClient): Backend {
   return {
     mode: 'cloud',
     async load(): Promise<AppData> {
-      const [s, a, p, w] = await Promise.all([
+      const [s, ...results] = await Promise.all([
         sb.from('settings').select('*').eq('id', 1).maybeSingle(),
-        sb.from('activities').select('*').order('position'),
-        sb.from('photos').select('*'),
-        sb.from('wheels').select('*').order('position'),
+        ...TABLE_NAMES.map((t) => sb.from(t).select('*')),
       ])
-      const metas = check(p).map(toPhoto)
+      const tables = {} as Tables
+      TABLE_NAMES.forEach((t, i) => {
+        const r = results[i]
+        if (r.error && isMissingTable(r.error)) {
+          console.warn(`Tabla "${t}" no existe aún: corre la migración SQL`)
+          ;(tables as any)[t] = []
+          return
+        }
+        ;(tables as any)[t] = check(r).map((row: any) => normalize(t, toCamel(row)))
+      })
+      const metas = tables.photos as unknown as PhotoMeta[]
       await signPaths(sb, metas.flatMap((m) => [m.path, m.thumbPath]))
+      tables.photos = metas.map(withUrls)
       const sRow = check(s)
-      return {
-        settings: sRow ? toSettings(sRow) : null,
-        activities: check(a).map(toActivity),
-        photos: metas.map(withUrls),
-        wheels: check(w).map(toWheel),
-      }
+      return { settings: sRow ? toSettings(sRow) : null, tables }
     },
     async saveSettings(st) {
       check(
@@ -123,11 +88,11 @@ export function createSupabaseBackend(sb: SupabaseClient): Backend {
           .upsert({ id: 1, title: st.title, name_a: st.nameA, name_b: st.nameB, since: st.since }),
       )
     },
-    async saveActivities(list) {
-      if (list.length) check(await sb.from('activities').upsert(list.map(fromActivity)))
+    async save(table, rows) {
+      if (rows.length) check(await sb.from(table).upsert(rows.map((r) => toSnake(r as any))))
     },
-    async deleteActivity(id) {
-      check(await sb.from('activities').delete().eq('id', id))
+    async remove(table, id) {
+      check(await sb.from(table).delete().eq('id', id))
     },
     async uploadPhoto(meta, full, thumb) {
       const up = async (path: string, blob: Blob) =>
@@ -137,33 +102,13 @@ export function createSupabaseBackend(sb: SupabaseClient): Backend {
             .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true }),
         )
       await Promise.all([up(meta.path, full), up(meta.thumbPath, thumb)])
-      check(await sb.from('photos').insert(fromPhoto(meta)))
+      check(await sb.from('photos').insert(toSnake(meta as any)))
       await signPaths(sb, [meta.path, meta.thumbPath])
       return withUrls(meta)
-    },
-    async savePhotos(list) {
-      if (list.length) check(await sb.from('photos').upsert(list.map(fromPhoto)))
     },
     async deletePhoto(p) {
       check(await sb.from('photos').delete().eq('id', p.id))
       await sb.storage.from(BUCKET).remove([p.path, p.thumbPath])
-    },
-    async saveWheels(list) {
-      if (list.length)
-        check(
-          await sb.from('wheels').upsert(
-            list.map((w) => ({
-              id: w.id,
-              name: w.name,
-              icon: w.icon,
-              options: w.options,
-              position: w.position,
-            })),
-          ),
-        )
-    },
-    async deleteWheel(id) {
-      check(await sb.from('wheels').delete().eq('id', id))
     },
     subscribe(onChange) {
       let t: ReturnType<typeof setTimeout> | undefined
@@ -172,7 +117,7 @@ export function createSupabaseBackend(sb: SupabaseClient): Backend {
         t = setTimeout(onChange, 700)
       }
       const ch = sb.channel('bedo-sync')
-      for (const table of ['settings', 'activities', 'photos', 'wheels']) {
+      for (const table of ['settings', ...TABLE_NAMES]) {
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, fire)
       }
       ch.subscribe()

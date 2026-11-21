@@ -1,6 +1,7 @@
 -- =====================================================================
 --  BEDO · Esquema de base de datos para Supabase
 --  Pegar completo en: Supabase → SQL Editor → New query → Run
+--  Después, correr también los archivos de supabase/migrations/ en orden.
 -- =====================================================================
 
 -- ---------- Tablas ----------

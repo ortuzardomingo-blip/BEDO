@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Frame, Trash2 } from 'lucide-react'
+import { ChevronRight, Frame, MapPin, Trash2 } from 'lucide-react'
 import { Confirm, Sheet } from './Sheet'
+import { LocationPicker } from './map/LocationPicker'
 import type { Photo } from '../lib/types'
+import type { LatLng } from '../lib/geo'
 import { useStore } from '../store'
 import { cn, formatDay, photoDate } from '../lib/utils'
 
@@ -10,6 +12,8 @@ export function PhotoEditSheet({ photo, onClose }: { photo: Photo | null; onClos
   const [caption, setCaption] = useState('')
   const [activityId, setActivityId] = useState('')
   const [inFrame, setInFrame] = useState(false)
+  const [loc, setLoc] = useState<LatLng | null>(null)
+  const [picking, setPicking] = useState(false)
   const [confirm, setConfirm] = useState(false)
 
   useEffect(() => {
@@ -17,11 +21,18 @@ export function PhotoEditSheet({ photo, onClose }: { photo: Photo | null; onClos
     setCaption(photo.caption)
     setActivityId(photo.activityId ?? '')
     setInFrame(photo.inFrame)
+    setLoc(photo.lat != null && photo.lng != null ? { lat: photo.lat, lng: photo.lng } : null)
   }, [photo])
 
   const save = () => {
     if (!photo) return
-    updatePhoto(photo.id, { caption: caption.trim(), activityId: activityId || null, inFrame })
+    updatePhoto(photo.id, {
+      caption: caption.trim(),
+      activityId: activityId || null,
+      inFrame,
+      lat: loc?.lat ?? null,
+      lng: loc?.lng ?? null,
+    })
     onClose()
   }
 
@@ -70,6 +81,20 @@ export function PhotoEditSheet({ photo, onClose }: { photo: Photo | null; onClos
             </div>
             <button
               type="button"
+              onClick={() => setPicking(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-line p-3.5 text-left transition hover:border-ink/30"
+            >
+              <MapPin size={20} strokeWidth={1.5} />
+              <span className="flex-1">
+                <span className="block text-sm font-medium">Ubicación</span>
+                <span className="block text-xs text-muted">
+                  {loc ? `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}` : 'Sin ubicación · aparecerá en el mapa'}
+                </span>
+              </span>
+              <ChevronRight size={16} className="text-muted" />
+            </button>
+            <button
+              type="button"
               onClick={() => setInFrame((v) => !v)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition',
@@ -106,6 +131,12 @@ export function PhotoEditSheet({ photo, onClose }: { photo: Photo | null; onClos
           </div>
         )}
       </Sheet>
+      <LocationPicker
+        open={picking}
+        onClose={() => setPicking(false)}
+        initial={loc ? { ...loc, name: '' } : null}
+        onPick={(p) => setLoc(p ? { lat: p.lat, lng: p.lng } : null)}
+      />
       <Confirm
         open={confirm}
         onClose={() => setConfirm(false)}

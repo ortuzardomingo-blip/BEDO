@@ -8,7 +8,18 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Activity, Backend, Photo, PhotoMeta, Settings, Wheel } from './lib/types'
+import {
+  type DailyWho,
+  type Activity,
+  type Backend,
+  type Photo,
+  type PhotoMeta,
+  type RowOf,
+  type Settings,
+  type TableName,
+  type Tables,
+  type Wheel,
+} from './lib/types'
 import { DEFAULT_SETTINGS, seedActivities, seedWheels } from './lib/seed'
 import { processImage, isImageFile } from './lib/images'
 import { uid } from './lib/utils'
@@ -24,25 +35,32 @@ interface Toast {
   text: string
 }
 
-interface Store {
+export interface UploadOpts {
+  activityId?: string | null
+  inFrame?: boolean
+  dailyDate?: string | null
+  dailyWho?: DailyWho | null
+}
+
+interface Store extends Tables {
   mode: Backend['mode']
   ready: boolean
   settings: Settings
-  activities: Activity[]
-  photos: Photo[]
-  wheels: Wheel[]
   upload: UploadState | null
   toasts: Toast[]
   toast(text: string): void
   updateSettings(patch: Partial<Settings>): void
+  // Genéricos
+  saveRow<T extends TableName>(table: T, row: RowOf<T>): void
+  patchRow<T extends TableName>(table: T, id: string, patch: Partial<RowOf<T>>): void
+  removeRow(table: TableName, id: string): void
+  // Específicos
   addActivity(title: string): Activity
   updateActivity(id: string, patch: Partial<Activity>): void
   deleteActivity(id: string): void
-  uploadPhotos(
-    files: File[] | FileList,
-    opts?: { activityId?: string | null; inFrame?: boolean },
-  ): Promise<Photo[]>
+  uploadPhotos(files: File[] | FileList, opts?: UploadOpts): Promise<Photo[]>
   updatePhoto(id: string, patch: Partial<PhotoMeta>): void
+  updatePhotos(ids: string[], patch: Partial<PhotoMeta>): void
   deletePhoto(id: string): void
   addWheel(name: string): Wheel
   updateWheel(id: string, patch: Partial<Wheel>): void
@@ -59,10 +77,24 @@ export function useStore() {
   return s
 }
 
-const strip = (p: Photo): PhotoMeta => {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Quita las URLs (src/thumb) antes de guardar una foto */
+const persistable = (table: TableName, row: any) => {
+  if (table !== 'photos') return row
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { src, thumb, ...meta } = p
+  const { src, thumb, ...meta } = row
   return meta
+}
+
+const EMPTY: Tables = {
+  activities: [],
+  photos: [],
+  wheels: [],
+  events: [],
+  goals: [],
+  places: [],
+  milestones: [],
+  items: [],
 }
 
 export function StoreProvider({
@@ -76,21 +108,43 @@ export function StoreProvider({
 }) {
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
-  const [activities, setActivities] = useState<Activity[]>([])
-  const [photos, setPhotos] = useState<Photo[]>([])
-  const [wheels, setWheels] = useState<Wheel[]>([])
+  const [tables, setTables] = useState<Tables>(EMPTY)
   const [upload, setUpload] = useState<UploadState | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const uploadRef = useRef<UploadState>({ total: 0, done: 0, failed: 0 })
 
-  const stateRef = useRef({ settings, activities, photos, wheels })
-  stateRef.current = { settings, activities, photos, wheels }
+  const stateRef = useRef({ settings, tables })
+  stateRef.current = { settings, tables }
 
   const toast = useCallback((text: string) => {
     const id = Date.now() + Math.random()
     setToasts((t) => [...t, { id, text }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200)
   }, [])
+
+  const doLoad = async () => {
+    try {
+      const data = await backend.load()
+      if (!data.settings) {
+        // Primera vez: cargamos los datos iniciales
+        const acts = seedActivities()
+        const whs = seedWheels()
+        await backend.saveSettings(DEFAULT_SETTINGS)
+        await backend.save('activities', acts)
+        await backend.save('wheels', whs)
+        data.settings = DEFAULT_SETTINGS
+        data.tables.activities = acts
+        data.tables.wheels = whs
+      }
+      setSettings(data.settings)
+      setTables(data.tables)
+    } catch (e) {
+      console.error(e)
+      toast('No se pudieron cargar los datos')
+    } finally {
+      setReady(true)
+    }
+  }
 
   const inflight = useRef<Promise<void> | null>(null)
   const load = useCallback(() => {
@@ -101,32 +155,6 @@ export function StoreProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backend])
 
-  const doLoad = async () => {
-    try {
-      const data = await backend.load()
-      if (!data.settings) {
-        // Primera vez: cargamos los datos iniciales
-        const acts = seedActivities()
-        const whs = seedWheels()
-        await backend.saveSettings(DEFAULT_SETTINGS)
-        await backend.saveActivities(acts)
-        await backend.saveWheels(whs)
-        data.settings = DEFAULT_SETTINGS
-        data.activities = acts
-        data.wheels = whs
-      }
-      setSettings(data.settings)
-      setActivities(data.activities)
-      setPhotos(data.photos)
-      setWheels(data.wheels)
-    } catch (e) {
-      console.error(e)
-      toast('No se pudieron cargar los datos')
-    } finally {
-      setReady(true)
-    }
-  }
-
   useEffect(() => {
     load()
     return backend.subscribe?.(load)
@@ -136,13 +164,67 @@ export function StoreProvider({
     (p: Promise<unknown>) => {
       p.catch((e) => {
         console.error(e)
-        toast('Algo falló al guardar. Reintentando sincronizar…')
+        toast(
+          e?.code === 'PGRST204' || e?.code === 'PGRST205'
+            ? 'Falta actualizar la base de datos (migración SQL)'
+            : 'Algo falló al guardar. Reintentando sincronizar…',
+        )
         load()
       })
     },
     [load, toast],
   )
 
+  // ---------- Genéricos ----------
+  const setRows = (table: TableName, fn: (rows: any[]) => any[]) =>
+    setTables((t) => ({ ...t, [table]: fn(t[table] as any[]) }))
+
+  const saveRow = useCallback(
+    (table: TableName, row: any) => {
+      setRows(table, (rows) => {
+        const i = rows.findIndex((r) => r.id === row.id)
+        if (i < 0) return [...rows, row]
+        const copy = rows.slice()
+        copy[i] = row
+        return copy
+      })
+      run(backend.save(table, [persistable(table, row)]))
+    },
+    [backend, run],
+  ) as Store['saveRow']
+
+  const patchRows = useCallback(
+    (table: TableName, ids: string[], patch: any) => {
+      const cur = (stateRef.current.tables[table] as any[]).filter((r) => ids.includes(r.id))
+      if (!cur.length) return
+      const next = cur.map((r) => ({ ...r, ...patch }))
+      setRows(table, (rows) => rows.map((r) => next.find((n) => n.id === r.id) ?? r))
+      run(backend.save(table, next.map((r) => persistable(table, r))))
+    },
+    [backend, run],
+  )
+
+  const patchRow = useCallback(
+    (table: TableName, id: string, patch: any) => patchRows(table, [id], patch),
+    [patchRows],
+  ) as Store['patchRow']
+
+  const removeRow = useCallback(
+    (table: TableName, id: string) => {
+      setTables((t) => {
+        const next: any = { ...t, [table]: (t[table] as any[]).filter((r) => r.id !== id) }
+        if (table === 'activities') {
+          next.photos = t.photos.map((p) => (p.activityId === id ? { ...p, activityId: null } : p))
+          next.goals = t.goals.map((g) => (g.activityId === id ? { ...g, activityId: null } : g))
+        }
+        return next
+      })
+      run(backend.remove(table, id))
+    },
+    [backend, run],
+  )
+
+  // ---------- Ajustes ----------
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       const next = { ...stateRef.current.settings, ...patch }
@@ -152,47 +234,32 @@ export function StoreProvider({
     [backend, run],
   )
 
+  // ---------- Planes ----------
   const addActivity = useCallback(
     (title: string) => {
-      const list = stateRef.current.activities
+      const list = stateRef.current.tables.activities
       const a: Activity = {
         id: uid(),
         title: title.trim(),
         note: '',
         done: false,
         doneAt: null,
+        scheduledFor: null,
+        lat: null,
+        lng: null,
+        placeName: '',
         position: list.reduce((m, x) => Math.max(m, x.position), -1) + 1,
         createdAt: new Date().toISOString(),
       }
-      setActivities([...list, a])
-      run(backend.saveActivities([a]))
+      saveRow('activities', a)
       return a
     },
-    [backend, run],
+    [saveRow],
   )
 
-  const updateActivity = useCallback(
-    (id: string, patch: Partial<Activity>) => {
-      const cur = stateRef.current.activities.find((a) => a.id === id)
-      if (!cur) return
-      const next = { ...cur, ...patch }
-      setActivities((l) => l.map((a) => (a.id === id ? next : a)))
-      run(backend.saveActivities([next]))
-    },
-    [backend, run],
-  )
-
-  const deleteActivity = useCallback(
-    (id: string) => {
-      setActivities((l) => l.filter((a) => a.id !== id))
-      setPhotos((l) => l.map((p) => (p.activityId === id ? { ...p, activityId: null } : p)))
-      run(backend.deleteActivity(id))
-    },
-    [backend, run],
-  )
-
+  // ---------- Fotos ----------
   const uploadPhotos = useCallback(
-    async (input: File[] | FileList, opts?: { activityId?: string | null; inFrame?: boolean }) => {
+    async (input: File[] | FileList, opts?: UploadOpts) => {
       const files = Array.from(input).filter(isImageFile)
       const skipped = Array.from(input).length - files.length
       if (skipped) toast(`${skipped} archivo(s) no son imágenes y se omitieron`)
@@ -221,11 +288,15 @@ export function StoreProvider({
               inFrame: opts?.inFrame ?? false,
               width: img.width,
               height: img.height,
+              lat: img.lat,
+              lng: img.lng,
+              dailyDate: opts?.dailyDate ?? null,
+              dailyWho: opts?.dailyDate ? (opts.dailyWho ?? 'a') : null,
               createdAt: new Date().toISOString(),
             }
             const photo = await backend.uploadPhoto(meta, img.full, img.thumb)
             added.push(photo)
-            setPhotos((l) => [...l.filter((p) => p.id !== photo.id), photo])
+            setRows('photos', (l) => [...l.filter((p) => p.id !== photo.id), photo])
             counts.done++
           } catch (e) {
             console.error(e)
@@ -247,30 +318,24 @@ export function StoreProvider({
     [backend, toast],
   )
 
-  const updatePhoto = useCallback(
-    (id: string, patch: Partial<PhotoMeta>) => {
-      const cur = stateRef.current.photos.find((p) => p.id === id)
-      if (!cur) return
-      const next = { ...cur, ...patch }
-      setPhotos((l) => l.map((p) => (p.id === id ? next : p)))
-      run(backend.savePhotos([strip(next)]))
-    },
-    [backend, run],
-  )
-
   const deletePhoto = useCallback(
     (id: string) => {
-      const cur = stateRef.current.photos.find((p) => p.id === id)
+      const cur = stateRef.current.tables.photos.find((p) => p.id === id)
       if (!cur) return
-      setPhotos((l) => l.filter((p) => p.id !== id))
-      run(backend.deletePhoto(strip(cur)))
+      setTables((t) => ({
+        ...t,
+        photos: t.photos.filter((p) => p.id !== id),
+        milestones: t.milestones.map((m) => (m.photoId === id ? { ...m, photoId: null } : m)),
+      }))
+      run(backend.deletePhoto(persistable('photos', cur)))
     },
     [backend, run],
   )
 
+  // ---------- Ruletas ----------
   const addWheel = useCallback(
     (name: string) => {
-      const list = stateRef.current.wheels
+      const list = stateRef.current.tables.wheels
       const w: Wheel = {
         id: uid(),
         name: name.trim() || 'Nueva ruleta',
@@ -278,75 +343,54 @@ export function StoreProvider({
         options: [],
         position: list.reduce((m, x) => Math.max(m, x.position), -1) + 1,
       }
-      setWheels([...list, w])
-      run(backend.saveWheels([w]))
+      saveRow('wheels', w)
       return w
     },
-    [backend, run],
-  )
-
-  const updateWheel = useCallback(
-    (id: string, patch: Partial<Wheel>) => {
-      const cur = stateRef.current.wheels.find((w) => w.id === id)
-      if (!cur) return
-      const next = { ...cur, ...patch }
-      setWheels((l) => l.map((w) => (w.id === id ? next : w)))
-      run(backend.saveWheels([next]))
-    },
-    [backend, run],
-  )
-
-  const deleteWheel = useCallback(
-    (id: string) => {
-      setWheels((l) => l.filter((w) => w.id !== id))
-      run(backend.deleteWheel(id))
-    },
-    [backend, run],
+    [saveRow],
   )
 
   const value = useMemo<Store>(
     () => ({
+      ...tables,
       mode: backend.mode,
       ready,
       settings,
-      activities,
-      photos,
-      wheels,
       upload,
       toasts,
       toast,
       updateSettings,
+      saveRow,
+      patchRow,
+      removeRow,
       addActivity,
-      updateActivity,
-      deleteActivity,
+      updateActivity: (id, patch) => patchRow('activities', id, patch),
+      deleteActivity: (id) => removeRow('activities', id),
       uploadPhotos,
-      updatePhoto,
+      updatePhoto: (id, patch) => patchRow('photos', id, patch),
+      updatePhotos: (ids, patch) => patchRows('photos', ids, patch),
       deletePhoto,
       addWheel,
-      updateWheel,
-      deleteWheel,
+      updateWheel: (id, patch) => patchRow('wheels', id, patch),
+      deleteWheel: (id) => removeRow('wheels', id),
       signOut,
     }),
     [
+      tables,
       backend.mode,
       ready,
       settings,
-      activities,
-      photos,
-      wheels,
       upload,
       toasts,
       toast,
       updateSettings,
+      saveRow,
+      patchRow,
+      patchRows,
+      removeRow,
       addActivity,
-      updateActivity,
-      deleteActivity,
       uploadPhotos,
-      updatePhoto,
       deletePhoto,
       addWheel,
-      updateWheel,
-      deleteWheel,
       signOut,
     ],
   )

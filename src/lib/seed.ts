@@ -50,6 +50,10 @@ export function seedActivities(): Activity[] {
     note: '',
     done: false,
     doneAt: null,
+    scheduledFor: null,
+    lat: null,
+    lng: null,
+    placeName: '',
     position: i,
     createdAt: now,
   }))
