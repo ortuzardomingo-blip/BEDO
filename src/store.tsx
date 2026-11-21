@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  DAILY_PREFIX,
+  isDailyOnly,
   type DailyWho,
   type Activity,
   type Backend,
@@ -43,6 +45,10 @@ export interface UploadOpts {
 }
 
 interface Store extends Tables {
+  /** Todas las fotos, incluidas las del diario (`photos` = solo las del álbum) */
+  allPhotos: Photo[]
+  /** Saca fotos del álbum y las deja solo en el diario */
+  moveToDaily(ids: string[]): Promise<number>
   mode: Backend['mode']
   ready: boolean
   settings: Settings
@@ -278,10 +284,12 @@ export function StoreProvider({
           try {
             const img = await processImage(file)
             const id = uid()
+            // Las fotos del día van aparte: no aparecen en el álbum general
+            const dir = opts?.dailyDate ? DAILY_PREFIX : ''
             const meta: PhotoMeta = {
               id,
-              path: `${id}.jpg`,
-              thumbPath: `thumbs/${id}.jpg`,
+              path: `${dir}${id}.jpg`,
+              thumbPath: `${dir}thumbs/${id}.jpg`,
               caption: '',
               takenAt: img.takenAt,
               activityId: opts?.activityId ?? null,
@@ -332,6 +340,30 @@ export function StoreProvider({
     [backend, run],
   )
 
+  const moveToDaily = useCallback(
+    async (ids: string[]) => {
+      let moved = 0
+      for (const id of ids) {
+        const cur = stateRef.current.tables.photos.find((p) => p.id === id)
+        if (!cur || isDailyOnly(cur)) continue
+        try {
+          const photo = await backend.movePhoto(
+            persistable('photos', cur),
+            `${DAILY_PREFIX}${id}.jpg`,
+            `${DAILY_PREFIX}thumbs/${id}.jpg`,
+          )
+          setRows('photos', (l) => l.map((p) => (p.id === id ? { ...p, ...photo } : p)))
+          moved++
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      if (moved < ids.length) toast('Algunas fotos no se pudieron mover')
+      return moved
+    },
+    [backend, toast],
+  )
+
   // ---------- Ruletas ----------
   const addWheel = useCallback(
     (name: string) => {
@@ -349,9 +381,14 @@ export function StoreProvider({
     [saveRow],
   )
 
+  const albumPhotos = useMemo(() => tables.photos.filter((p) => !isDailyOnly(p)), [tables.photos])
+
   const value = useMemo<Store>(
     () => ({
       ...tables,
+      photos: albumPhotos,
+      allPhotos: tables.photos,
+      moveToDaily,
       mode: backend.mode,
       ready,
       settings,
@@ -376,6 +413,8 @@ export function StoreProvider({
     }),
     [
       tables,
+      albumPhotos,
+      moveToDaily,
       backend.mode,
       ready,
       settings,

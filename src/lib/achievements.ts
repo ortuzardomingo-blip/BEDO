@@ -32,7 +32,12 @@ export interface Achievement {
   goal: number
 }
 
-export function computeAchievements(t: Tables, settings: Settings, dailyStreak: number): Achievement[] {
+export function computeAchievements(
+  t: Tables,
+  settings: Settings,
+  dailyStreak: number,
+  dailyCount: number,
+): Achievement[] {
   const done = t.activities.filter((a) => a.done).length
   const located = t.photos.map((p) => photoCoords(p, t.activities)).filter((c) => !!c)
   const maxKm = located.reduce((m, c) => Math.max(m, distanceKm(SANTIAGO, c!)), 0)
@@ -40,7 +45,7 @@ export function computeAchievements(t: Tables, settings: Settings, dailyStreak: 
   const goalsDone = t.goals.filter((g) => g.target > 0 && g.entries.reduce((s, e) => s + e.amount, 0) >= g.target).length
   const watched = t.items.filter((i) => (i.list === 'peliculas' || i.list === 'series') && i.done).length
   const together = settings.since ? daysSince(settings.since) : 0
-  const daily = t.photos.filter((p) => p.dailyDate).length
+  const daily = dailyCount
 
   const a = (id: string, title: string, description: string, icon: LucideIcon, value: number, goal: number): Achievement => ({
     id,

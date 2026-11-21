@@ -86,6 +86,20 @@ export const localBackend: Backend = {
     await mutate((d) => upsert((d.photos ??= []), [meta]))
     return resolve(meta)
   },
+  async movePhoto(p, path, thumbPath) {
+    for (const [from, to] of [
+      [p.path, path],
+      [p.thumbPath, thumbPath],
+    ]) {
+      const blob = await get<Blob>(`blob:${from}`, store)
+      if (blob) await set(`blob:${to}`, blob, store)
+      await del(`blob:${from}`, store)
+      urlCache.delete(from)
+    }
+    const meta = { ...p, path, thumbPath }
+    await mutate((d) => upsert((d.photos ??= []), [meta]))
+    return resolve(meta)
+  },
   async deletePhoto(p) {
     await mutate((d) => {
       d.photos = (d.photos ?? []).filter((x) => x.id !== p.id)

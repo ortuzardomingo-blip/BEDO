@@ -5,12 +5,15 @@ import { Sheet } from '../../components/Sheet'
 import { PhotoViewer } from '../../components/PhotoViewer'
 import { DailyPair } from '../../components/DailyPair'
 import { cn, dailyStreak, formatLong, formatMonth, isoDate, todayISO } from '../../lib/utils'
-import type { DailyWho, Photo } from '../../lib/types'
+import { isDailyOnly, type DailyWho, type Photo } from '../../lib/types'
 
 const WEEK = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
 export function DailyView() {
-  const { photos, settings } = useStore()
+  const { allPhotos: photos, settings, moveToDaily, toast } = useStore()
+  const [moving, setMoving] = useState(false)
+  // Fotos del día subidas antes de que el diario fuera aparte (siguen en el álbum)
+  const legacy = photos.filter((p) => p.dailyDate && !isDailyOnly(p))
   const today = todayISO()
   const [month, setMonth] = useState(today.slice(0, 7))
   const [day, setDay] = useState<string | null>(null)
@@ -116,6 +119,27 @@ export function DailyView() {
       <p className="mt-3 text-center text-sm text-muted">
         {monthDays.length} de {cells.filter(Boolean).length} días con foto · una de {names[0]} y una de {names[1]} cada día
       </p>
+
+      {legacy.length > 0 && (
+        <div className="mx-auto mt-5 flex max-w-2xl flex-wrap items-center justify-between gap-3 rounded-2xl bg-sand/60 p-4 text-sm">
+          <p className="flex-1 text-ink-soft">
+            {legacy.length === 1 ? 'Hay 1 foto del día' : `Hay ${legacy.length} fotos del día`} que también
+            aparece{legacy.length === 1 ? '' : 'n'} en el álbum (se subieron antes de este cambio).
+          </p>
+          <button
+            className="btn-outline h-9"
+            disabled={moving}
+            onClick={async () => {
+              setMoving(true)
+              const n = await moveToDaily(legacy.map((p) => p.id))
+              setMoving(false)
+              if (n) toast(n === 1 ? 'Foto movida al diario' : `${n} fotos movidas al diario`)
+            }}
+          >
+            {moving ? 'Moviendo…' : 'Dejarlas solo en el diario'}
+          </button>
+        </div>
+      )}
 
       <Sheet open={!!day} onClose={() => setDay(null)} title={day ? formatLong(day) : ''} subtitle="La foto de cada uno este día">
         {day && <DailyPair date={day} />}

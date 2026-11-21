@@ -121,9 +121,14 @@ export function PhotoEditSheet({ photo, onClose }: { photo: Photo | null; onClos
               </span>
             </button>
             <div className="flex items-center justify-between gap-2 pt-1">
-              <button className="btn-ghost -ml-3 text-accent" onClick={() => setConfirm(true)}>
-                <Trash2 size={16} /> Eliminar
-              </button>
+              {photo.dailyDate ? (
+                // Es la foto del día de alguien: no se puede borrar
+                <span className="text-xs text-muted">Es una foto del día · no se puede borrar</span>
+              ) : (
+                <button className="btn-ghost -ml-3 text-accent" onClick={() => setConfirm(true)}>
+                  <Trash2 size={16} /> Eliminar
+                </button>
+              )}
               <button className="btn-primary px-6" onClick={save}>
                 Guardar
               </button>

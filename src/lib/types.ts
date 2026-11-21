@@ -25,6 +25,10 @@ export interface Activity {
 
 export type DailyWho = 'a' | 'b'
 
+/** Las fotos subidas desde "La foto del día" viven aparte, solo en el diario */
+export const DAILY_PREFIX = 'daily/'
+export const isDailyOnly = (p: { path: string }) => p.path.startsWith(DAILY_PREFIX)
+
 /** Datos persistidos de una foto */
 export interface PhotoMeta {
   id: string
@@ -157,6 +161,8 @@ export interface Backend {
   save(table: TableName, rows: object[]): Promise<void>
   remove(table: TableName, id: string): Promise<void>
   uploadPhoto(meta: PhotoMeta, full: Blob, thumb: Blob): Promise<Photo>
+  /** Mueve los archivos de una foto a otra ruta (p.ej. al diario) y actualiza su fila */
+  movePhoto(p: PhotoMeta, path: string, thumbPath: string): Promise<Photo>
   deletePhoto(p: PhotoMeta): Promise<void>
   subscribe?(onChange: () => void): () => void
 }

@@ -7,8 +7,9 @@ import { cn, dailyStreak } from '../../lib/utils'
 export function useAchievements() {
   const s = useStore()
   return useMemo(() => {
-    const streak = dailyStreak(new Set(s.photos.filter((p) => p.dailyDate).map((p) => p.dailyDate!)))
-    return computeAchievements(s, s.settings, streak)
+    const daily = s.allPhotos.filter((p) => p.dailyDate)
+    const streak = dailyStreak(new Set(daily.map((p) => p.dailyDate!)))
+    return computeAchievements(s, s.settings, streak, daily.length)
   }, [s])
 }
 
