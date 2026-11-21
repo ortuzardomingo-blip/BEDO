@@ -125,7 +125,8 @@ export function StoreProvider({
   const toast = useCallback((text: string) => {
     const id = Date.now() + Math.random()
     setToasts((t) => [...t, { id, text }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200)
+    // Los mensajes largos (errores) quedan más tiempo para poder leerlos
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), text.length > 60 ? 8000 : 3200)
   }, [])
 
   const doLoad = async () => {
@@ -343,6 +344,7 @@ export function StoreProvider({
   const moveToDaily = useCallback(
     async (ids: string[]) => {
       let moved = 0
+      let lastError = ''
       for (const id of ids) {
         const cur = stateRef.current.tables.photos.find((p) => p.id === id)
         if (!cur || isDailyOnly(cur)) continue
@@ -356,9 +358,11 @@ export function StoreProvider({
           moved++
         } catch (e) {
           console.error(e)
+          lastError = (e as { message?: string })?.message ?? String(e)
         }
       }
-      if (moved < ids.length) toast('Algunas fotos no se pudieron mover')
+      if (moved < ids.length)
+        toast(`${ids.length - moved} foto(s) no se pudieron mover${lastError ? ': ' + lastError : ''}`)
       return moved
     },
     [backend, toast],

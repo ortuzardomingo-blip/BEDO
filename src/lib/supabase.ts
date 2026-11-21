@@ -110,10 +110,19 @@ export function createSupabaseBackend(sb: SupabaseClient): Backend {
       const store = sb.storage.from(BUCKET)
       const mv = async (from: string, to: string) => {
         const { error } = await store.move(from, to)
-        if (error) throw error
+        if (!error) return
+        // Plan B: copiar y luego borrar el original
+        const c = await store.copy(from, to)
+        if (c.error) throw new Error(`mover: ${error.message} · copiar: ${c.error.message}`)
+        await store.remove([from])
       }
       await mv(p.path, path)
-      await mv(p.thumbPath, thumbPath)
+      try {
+        await mv(p.thumbPath, thumbPath)
+      } catch (e) {
+        await mv(path, p.path).catch(() => {}) // deshacer para no dejar la foto rota
+        throw e
+      }
       const meta = { ...p, path, thumbPath }
       check(await sb.from('photos').update({ path, thumb_path: thumbPath }).eq('id', p.id))
       await signPaths(sb, [path, thumbPath])
